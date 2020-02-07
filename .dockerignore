@@ -1,0 +1,4 @@
+frontend
+.git
+!frontend/target
+!frontend/src/main/java/com/gmi/gwaswebapp/client/resources/
