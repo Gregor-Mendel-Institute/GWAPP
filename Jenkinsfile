@@ -1,4 +1,5 @@
 buildDockerImage([
-    pushRegistryNamespace: "nordborglab/gwapp",
+    pushRegistryNamespace: "nordborglab",
+    imageName: "gwapp",
     pushBranches: ['master']
 ])
