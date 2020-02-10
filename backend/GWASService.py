@@ -13,7 +13,7 @@ import h5py
 import numpy, math
 from cherrypy.lib.static import serve_file
 import simplejson
-from JBrowseDataSource import DataSource as JBrowseDataSource 
+from JBrowseDataSource import DataSource as JBrowseDataSource
 from cherrypy.lib import http
 import tables
 import time
@@ -24,22 +24,22 @@ import cPickle
 import numpy as np
 
 
- 
+
 
 class GWASService:
-    base_path = "/srv/data/"
+    base_path = "/srv/data/gwas-web/"
     base_path_jbrowse = base_path
     base_path_datasets = base_path + "datasets/"
     base_jbrowse_path = base_path_jbrowse + "jbrowse/"
     track_folder = "TAIR10"
-    
+
     #tracks/Chr%s/TAIR10/"
     __datasource = None
     _lazyArrayChunks = [{}, {}, {}, {}, {}]
     hdf5_filename = base_path + "data.hdf5"
     genomeStats_hdf5_filename = base_path + '250k_stats.hdf5'
     gene_annot_file = base_path + "genome_annotation.pickled"
-    
+
     def __init__(self):
         self.data_file = tables.open_file(self.hdf5_filename, "r")
         self.accession_ids = None
@@ -51,23 +51,23 @@ class GWASService:
                     {'name':'fst', 'label':'Fst (North-South) [Lewontin and Krakhauer, 1973]'}, {'name':'clr', 'label':'CLR [Nielsen et al., 2005]'}, \
                     {'name':'phs', 'label':'PHS [Toomaijan et al., 2006]'}, {'name':'rho', 'label':'RHO [McVean et al., 2004]', 'isStackable':False}, {'name':'lyr', 'label':'Lyrata-similarity [Hu et al., 2011]', 'isStackable':False}]
         self.supported_transformations = ['', 'log', 'sqrt', 'box_cox']
-        
+
     def _getUserId(self):
         request = cherrypy.request
         return request.cookie.get('GWAS_USER_ID', None)
-    
+
     def _getUserPath(self):
         userID = self._getUserId()
-        if userID  is None: 
-            raise Exception('No UserID found')  
+        if userID  is None:
+            raise Exception('No UserID found')
         path = self.base_path_datasets + userID.value + ".hdf5"
-        return path 
-    
+        return path
+
     def _generateUserID(self):
         import uuid
         UserID = uuid.uuid1()
         return str(UserID)
-    
+
     def _getGeneCountHistogramData(self, chr):
         if self.__datasource is None:
             self.__datasource = JBrowseDataSource(self.base_jbrowse_path, self.track_folder)
@@ -76,7 +76,7 @@ class GWASService:
         maxValue = max(histogramData)
         positions = [i * bpPerBin for i in range(0, binCount + 1)]
         return zip(positions, histogramData)
-    
+
     def _getPhenotypeExplorerData(self, phenotype, dataset, transformation, phen_vals=None):
         import datetime
         result = {}
@@ -100,7 +100,7 @@ class GWASService:
         column_ls = [row[0] for row in column_name_type_ls]
         result = data_table.ToJSon(columns_order=column_ls)
         return result
-    
+
     def _getAccessionsFromIds(self, accession_ids=[]):
         import bisect
         table = self.data_file.root.accessions.infos
@@ -108,9 +108,9 @@ class GWASService:
         indices = [bisect.bisect(ids, val) - 1 for val in accession_ids]
         accessions = table.read_coordinates(indices)
         return accessions
-    
-         
-    
+
+
+
     def _getLocationDistributionFromIds(self, accession_ids=[]):
         import bisect, itertools
         from operator import itemgetter
@@ -120,19 +120,19 @@ class GWASService:
             accessions = self._getAccessionsFromIds(accession_ids).tolist()
         locations = {}
         selector = lambda row:row[4]
-        
+
         for country, rows in itertools.groupby(sorted(accessions, key=itemgetter(4)), selector):
             locations[country] = len(list(rows))
         return locations
-    
+
     def _getAccessionIds(self):
-        if self.accession_ids is None: 
+        if self.accession_ids is None:
             table = self.data_file.root.accessions.infos
             self.accession_ids = table.read(field='accession_id')
-        return self.accession_ids 
-    
+        return self.accession_ids
+
     def _getAccessions(self, start, length, Name='', Country=''):
-        
+
         table = self.data_file.root.accessions.infos
         accessions = []
         stop = int(start) + int(length)
@@ -159,12 +159,12 @@ class GWASService:
                         collection_date = datetime.fromtimestamp(int(row[1]))
                         collection_date = datetime.strftime(collection_date, '%d.%m.%Y')
                         accession = {'accession_id':row[0], 'collection_date':collection_date, 'collector':unicode(row[2], 'latin1'), 'country':row[4], 'latitude':row[4] if not numpy.isnan(row[4]) else None, 'longitude':row[5] if not numpy.isnan(row[5]) else None, 'name':unicode(row[6], 'utf8')}
-                        
+
                         accessions.append(accession)
                     i = i + 1
             count = i
         return [accessions, count]
-    
+
     def _getPhenotypes(self, userID=None):
         phenotypes = []
         try:
@@ -176,16 +176,16 @@ class GWASService:
             phenotypes = gwa_record.get_phenotype_info()
         except Exception, err:
             raise cherrypy.HTTPError("500", str(err))
-        return phenotypes  
-    
+        return phenotypes
+
     def _getPhenotypeValues(self, phenotype, transformation):
         path = self._getUserPath()
         gwa_record = gwa_records.GWASRecord(path)
         gwa_record.open("r+")
         values = gwa_record.get_phenotype_values(phenotype, transformation)
         return values
-        
-    
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getUserData(self, loadAccessions=None):
@@ -196,17 +196,17 @@ class GWASService:
         else:
             userID = userID.value
             phenotypes = self._getPhenotypes(userID)
-            
+
         retval = {'userid':userID, 'phenotypes':phenotypes}
         if loadAccessions is not None:
             accessions, count = self._getAccessions(0, -1)
             retval['accessions'] = {'accessions':accessions, 'count':count}
         retval['supportedTransformations'] = self.supported_transformations
         return retval
-    
-    
-    
-    
+
+
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getPhenotypeInfo(self, phenotype, transformation=None, userID=None):
@@ -227,10 +227,10 @@ class GWASService:
         if result['status'] == 'ERROR':
             raise cherrypy.HTTPError("500", result['statustext'])
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    def getTransformation(self, phenotype, dataset, transformation): 
+    def getTransformation(self, phenotype, dataset, transformation):
         path = self._getUserPath()
         gwa_record = gwa_records.GWASRecord(path)
         gwa_record.open("r+")
@@ -252,8 +252,8 @@ class GWASService:
         result['sp_pval'] = sp_pval if sp_pval == 0 or sp_pval is None else round(-math.log10(sp_pval), 2)
         result['motionchartTable'] = self._getPhenotypeExplorerData(phenotype, dataset, transformation, phen_vals)
         return result
-            
-    
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getAssociationData(self, phenotype, dataset, transformation, analysis, result_name=None, userID=None):
@@ -266,7 +266,7 @@ class GWASService:
             gwa_record = gwa_records.GWASRecord(path)
             gwa_record.open("r+")
             association_result = gwa_record.get_results_by_chromosome(phenotype, dataset, analysis.lower(), result_name, transformation)
-            
+
             description = [('position', "number", "Position"), ('value', 'number', '-log Pvalue')]
             chr2data = {}
             for i in range(1, 6):
@@ -274,7 +274,7 @@ class GWASService:
                 data.sort()
                 data_table = gviz_api.DataTable(description)
                 data_table.LoadData(data)
-                chr2data[i] = data_table.ToJSon(columns_order=("position", "value")) 
+                chr2data[i] = data_table.ToJSon(columns_order=("position", "value"))
             result['chr2data'] = chr2data
             result['chr2length'] = association_result['chromosome_ends']
             result['max_value'] = association_result['max_score']
@@ -289,7 +289,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def deleteTransformation(self, phenotype, dataset, transformation, userID=None):
@@ -303,7 +303,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def deleteAnalysis(self, phenotype, dataset, transformation, analysis, userID=None):
@@ -317,7 +317,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def deleteResult(self, phenotype, dataset, transformation, analysis, result_name, userID=None):
@@ -333,7 +333,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def deletePhenotype(self, phenotype, userID=None):
@@ -347,7 +347,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def deleteCustomGenomeStats(self, phenotype, dataset, stat):
@@ -361,7 +361,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def check_gwas(self):
@@ -374,7 +374,7 @@ class GWASService:
             result['status'] = 'WARNING'
             result['statustext'] = check
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def run_gwas(self, phenotype, dataset, transformation, analysis, result_name=None, chromosome=None, position=None, showProgress=None):
@@ -396,7 +396,7 @@ class GWASService:
                     result['progress'] = 100
                 else:
                     showProgress_writer = ProgressFileWriter(progress_filename, "r")
-                    
+
                     result['progress'] = showProgress_writer.get_progress()
                     result['currentTask'] = showProgress_writer.get_task_status()
                     result['status'] = "OK"
@@ -415,7 +415,7 @@ class GWASService:
             if showProgress is None:
                 gwa_record.dec_run_count()
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getQQPlotData(self, phenotype, dataset, transformation, analysis=None):
@@ -427,7 +427,7 @@ class GWASService:
             data = gwa_record.getQQPlotData(phenotype, transformation, analysis)
             for results in data['observed']:
                 column_name_type_ls.append((results['name'], ("number", "Observer (p) - %s" % results['name'])))
-                
+
             description = dict(column_name_type_ls)
             data_table = gviz_api.DataTable(description)
             data_table.LoadData(zip(data['expected'], *data['observerd'].values()))
@@ -435,8 +435,8 @@ class GWASService:
             result = {'status':'OK', 'data':data_table.ToJSon(columns_order=column_ls)}
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
-        return result 
-    
+        return result
+
     @cherrypy.expose
     @cherrypy.tools.response_headers(headers=[('Content-Type', 'image/png')])
     def getQQPlotImage(self, phenotype, dataset, transformation, analysis=None, result_name='results'):
@@ -445,8 +445,8 @@ class GWASService:
         gwa_record.open("r+")
         image = gwa_record.get_qq_plots(phenotype, dataset, transformation, analysis, result_name)
         return image
-        
-    
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getTransformationPreview(self, phenotype, dataset, transformation, new_transformation, userID=None):
@@ -467,7 +467,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def saveNewTransformation(self, phenotype, dataset, transformation, new_transformation, userID=None):
@@ -483,7 +483,7 @@ class GWASService:
         except Exception, err:
             result = {"status":"ERROR", "statustext":"%s" % str(err)}
         return result
-    
+
     @cherrypy.expose
     def uploadPhenotype(self, phenotype_file=None, phenotype_content=None):
         import tempfile
@@ -494,7 +494,7 @@ class GWASService:
             temp_file = tempfile.NamedTemporaryFile(delete=False)
             if phenotype_file.file is not None:
                 temp_file.file.write(phenotype_file.file.read())
-                
+
             elif phenotype_content is not None:
                 temp_file.file.write(phenotype_content)
             else:
@@ -505,7 +505,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return simplejson.dumps(retval)
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getGenes(self, chromosome, start, end, isFeatures=''):
@@ -518,7 +518,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getGeneFromName(self, query):
@@ -531,7 +531,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getGenesFromQuery(self, query):
@@ -550,9 +550,9 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
-    
-    
+
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getGeneDescription(self, gene):
@@ -563,7 +563,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def showLD(self, phenotype, dataset, transformation, analysis, result_name, chr, start=None, end=None, position=None, exact=None):
@@ -577,7 +577,7 @@ class GWASService:
         else:
             retval = gwa_record.get_exact_ld(phenotype, dataset, transformation, analysis, result_name, chr, position)
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def calculateLD(self, phenotype, dataset, transformation, analysis, result_name):
@@ -590,21 +590,21 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
-    
+
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getAccessions(self, start, length, Name='', Country=''):
         accessions, count = self._getAccessions(int(start), int(length), Name, Country)
         retval = {'accessions':accessions, 'count':count}
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getPhenotypeExplorerData(self, phenotype, transformation):
         retval = self._getPhenotypeExplorerData(phenotype, transformation)
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getLocationDistributionData(self, phenotype=None, dataset=None):
@@ -620,7 +620,7 @@ class GWASService:
             accession_ids_ls = {'All':None}
         else:
             accession_ids_ls = gwa_record.get_dataset_accession_ids(phenotype, dataset)
-        
+
         for dataset, accession_ids in accession_ids_ls.iteritems():
             location_dist = self._getLocationDistributionFromIds(accession_ids)
             data = []
@@ -630,7 +630,7 @@ class GWASService:
             data_table.LoadData(data)
             retval[dataset] = data_table.ToJSon(columns_order=column_ls)
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getDatasetAccession(self, phenotype, dataset, transformation='raw'):
@@ -638,7 +638,7 @@ class GWASService:
         gwa_record = gwa_records.GWASRecord(path)
         gwa_record.open("r+")
         accession_ids_ls = gwa_record.get_dataset_accession_ids(phenotype, dataset)
-        
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     @cherrypy.tools.json_in()
@@ -650,9 +650,9 @@ class GWASService:
         gwa_record.open("r+")
         retval = gwa_record.save_dataset(dataset)
         if retval['status'] != 'OK':
-            raise Exception(retval['statustext']) 
+            raise Exception(retval['statustext'])
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def deleteDataset(self, phenotype, dataset, userID=None):
@@ -698,7 +698,7 @@ class GWASService:
     def downloadHDF5File(self):
         path = self._getUserPath()
         return serve_file(path, "application/x-download", "attachment", 'analysis.hdf5')
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getGenomeStatsList(self):
@@ -707,7 +707,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getCustomGenomeStatsList(self, phenotype, dataset):
@@ -719,7 +719,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose
     def uploadGenomeStatsData(self, phenotype, dataset, genomestats_name, genomestats_file):
         import tempfile
@@ -736,7 +736,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return simplejson.dumps(retval)
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getCustomGenomeStatsData(self, phenotype, dataset, stats, chr):
@@ -764,7 +764,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def getGenomeStatsData(self, stats, chr):
@@ -794,7 +794,7 @@ class GWASService:
                 chr_region = group.attrs['chr_regions'][chr_num]
                 stats_values = group['stats'][chr_region[0]:chr_region[1], stats_ix]
                 positions = group['positions'][chr_region[0]:chr_region[1], 1]
-                
+
                 for stat in stats:
                     stat_label = stat
                     stat_data = next((genome_stat for genome_stat in self.genome_wide_stats if genome_stat['name'] == stat), None)
@@ -810,7 +810,7 @@ class GWASService:
         except Exception, err:
             retval = {"status":"ERROR", "statustext":"%s" % str(err)}
         return retval
-    
+
     @cherrypy.expose()
     def getProgressBarHTML(self):
         retval = """
@@ -831,8 +831,8 @@ class GWASService:
             background: literal("-moz-linear-gradient(#D6D5D4 0%, #E5E5E4 100%) !important");
             background: literal("-o-linear-gradient(#D6D5D4 0%, #E5E5E4 100%) !important");
         }
-        
-        
+
+
         .progress_bar_bg {
             -webkit-border-radius: 4px 4px 4px 4px;
             -moz-border-radius: 4px 4px 4px 4px;
@@ -849,7 +849,7 @@ class GWASService:
             -moz-box-shadow: inset 0px 1px 4px 0px rgba(0, 0, 0, 0.5), 0px 1px 0px 0px rgba(255, 255, 255, .5);
             box-shadow: inset 0px 1px 4px 0px rgba(0, 0, 0, 0.5), 0px 1px 0px 0px rgba(255, 255, 255, .5);
         }
-        
+
         .progress_bar_status {
             transition: width 2s;
             -moz-transition: width 2s; /* Firefox 4 */
@@ -867,23 +867,23 @@ class GWASService:
             width: 0;
 
         }
-        
+
         .progress_bar_status_complete {
             color: green;
             /* background: #E5FDD0; */
         }
-        
+
         .progress_content {
             border-right:2px solid transparent;
             position:relative;
             top: -25px;
         }
-        
+
         .progress_inner {
              background: none repeat scroll 0 0 #5993CE;
             height: 23px;
         }
-        
+
         .progress_highlight {
             border-radius: 100% 100% 100% 100%;
             box-shadow: 0 12px 16px -4px rgba(255, 255, 255, 0.4), 0 40px 8px -8px rgba(255, 255, 255, 0.4);
@@ -894,28 +894,28 @@ class GWASService:
         }
         .progress_border_l_r {
             padding: 1px 0;
-            width: 1px;    
+            width: 1px;
         }
         .progress_border {
             left:0;
             position:absolute;
             top:0;
         }
-        
+
         .progress_border_left div, .progress_border_right div {
              background: literal("-moz-linear-gradient(#67A5EC 0%, #3776B4 100%) repeat scroll 0 0 transparent !important");
             height: 21px;
         }
-        
+
         .progress_border_bg {
             top:22px;
             width:100%;
         }
-        
+
         .progress_border_bt {
             width:100%;
         }
-        
+
         .progress_border_bt div {
             background: #D8E8F7;
             background: literal("-webkit-gradient(linear, left top, right top, color-stop(0, #6CA8EF), color-stop(.5, #D8E8F7), color-stop(1, #6CA8EF))!important");
@@ -924,13 +924,13 @@ class GWASService:
             height: 1px;
             margin: 0 1px;
         }
-        
+
         .progress_border_bg div {
              background: none repeat scroll 0 0 #3776B4;
              height:1px;
              margin 0 1px;
         }
-        
+
         .progress_border_right {
             left:auto;
             right:0;
@@ -950,7 +950,7 @@ class GWASService:
             text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.5);
             left:50%;
         }
-        
+
         .progress_bar_container {
             opacity : 1;
             transition: opacity 1s;
@@ -958,13 +958,13 @@ class GWASService:
             -webkit-transition: opacity 1s; /* Safari and Chrome */
             -o-transition: opacity 1s; /* Opera */
         }
-        
+
         .progress_bar_container_visible {
             opacity: 1;
         }
          </STYLE>
          <script type="text/javascript">
-                
+
                 window.addEventListener("storage", function(e) {
                     var progress_bar_status = document.getElementById('progress_bar_status');
                     var progress_bar_label = document.getElementById('progress_label');
@@ -989,9 +989,9 @@ class GWASService:
                         progress_bar_task.innerHTML = value;
                     }
                 }, false);
-                
+
         function refresh() {
-           
+
            document.getElementById('progress_bar_task').innerHTML = 'test';
         }
          </script>
@@ -1001,42 +1001,42 @@ class GWASService:
         <body style="font-family:Arial Unicode MS, Arial, sans-serif;font-size:small;";>
         <div class="container" style="width: 350px; height: 50px;">
             <div class="progress_bar_container" style="width: 280px; height: 100%%;">
-                <div> 
-                    <span class="progress_bar_task" id="progress_bar_task">&nbsp;</span> 
-                </div> 
-                <div class="progress_bar"> 
-                   <div class="progress_bar_bg">  </div> 
-                   <div class="progress_content"> 
+                <div>
+                    <span class="progress_bar_task" id="progress_bar_task">&nbsp;</span>
+                </div>
+                <div class="progress_bar">
+                   <div class="progress_bar_bg">  </div>
+                   <div class="progress_content">
                       <div class="progress_bar_status" id="progress_bar_status" style="width: 0%;">
-                         <div class="progress_inner"> 
+                         <div class="progress_inner">
                          <div class="progress_highlight">
                              <div>  </div>
-                        </div> 
+                        </div>
                         <div class="progress_border_left progress_border_l_r progress_border"><div>
                       </div>
-                    </div> 
+                    </div>
                     <div class="progress_border_right progress_border_l_r progress_border">
                        <div>
                     </div>
-                  </div> 
+                  </div>
                   <div class="progress_border_bg progress_border">
                      <div></div>
-                  </div> 
-                </div> 
+                  </div>
+                </div>
                 <div class="progress_border progress_border_bt">
                    <div> </div>
                 </div>
-              </div> 
-              <span class="progress_label" id="progress_label">0%</span> 
-            </div> 
+              </div>
+              <span class="progress_label" id="progress_label">0%</span>
+            </div>
         </div>
     </div>
 </div>
         </body>
         </html>
-        """ 
+        """
         return retval + retval2
-    
+
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def testProgress(self, test=None, showProgress=None):
@@ -1056,4 +1056,4 @@ class GWASService:
         if f is not None:
             f.close()
         return retval
-   
+

@@ -14,7 +14,7 @@ COPY . .
 
 RUN chown -R gwas-web:root /gwapp && chmod -R 755 /gwapp
 
-RUN echo "cm_dir = /srv/data/dataset/" > /home/gwas-web/.gwa_config
+RUN echo "cm_dir = /srv/data/gwas-web/dataset/" > /home/gwas-web/.gwa_config
 
 # required because of https://github.com/docker/docker/issues/20240
 RUN cd backend && ln -s static ../frontend/target/gwaswebapp-0.0.1-SNAPSHOT/ && cd public && ln -s resources ../../frontend/src/main/java/com/gmi/gwaswebapp/client/resources/ && cd /gwapp
